@@ -1,0 +1,257 @@
+var VisitingCookieTracker = { Status: '', PageView: 0, Visits: 0, PopupAlreadyShownOnVisit: [] };
+var T3MCP = {
+    HideForm: function(trackEvent) {
+        if(!T3MCP.UserHasSignedup && trackEvent){
+            _MCPopupCustomCallBack.ClosedWithoutSignup();
+        }
+
+        T3MCP.Popup.removeClass('modalize');
+    },
+    ReadCookiesAndShowPopup: function () {
+        var sessionCookie = T3Core.CookieManager.ReadCookie(_SessionCookieName);
+        var mce_cookie_value = this.ReadJsonFromCookie(_MCCookieName);
+
+        if (mce_cookie_value == null && sessionCookie == null) {
+            T3Core.CookieManager.CreateCookie(_SessionCookieName, 1);
+            this.SaveJsonToCookie(_MCCookieName, CookieValues.ShowOnNextVisit, 1, 1, '', 30);
+            mce_cookie_value = this.ReadJsonFromCookie(_MCCookieName);
+        } else {
+
+            if (mce_cookie_value == null) {
+                this.SaveJsonToCookie(_MCCookieName, CookieValues.ShowOnNextVisit, 1, 1, '', 30);
+                mce_cookie_value = this.ReadJsonFromCookie(_MCCookieName);
+            }
+
+            if (sessionCookie == null) {
+                var obj = mce_cookie_value;
+                var visitNumber = obj.Visits + 1;
+                var pageViewNumber = obj.PageView;
+                T3Core.CookieManager.CreateCookie(_SessionCookieName, visitNumber);
+                if (obj.Status == CookieValues.ShowOnNextVisit) {
+                    this.SaveJsonToCookie(_MCCookieName, CookieValues.ShowOnNextVisit, pageViewNumber, visitNumber, '', 30);
+                }
+            }
+        }
+
+        if (mce_cookie_value.Status == CookieValues.ShowOnNextVisit && _ShowPopupOnCurrentPage) {
+            this.ProcessCookiesValuesAndShowPopupIfNeeded();
+        }
+
+    },
+    SaveJsonToCookie: function (cookieName, status, pageview, visits, visitpopupshown, duration) {
+        VisitingCookieTracker.Status = status;
+        VisitingCookieTracker.PageView = pageview;
+        VisitingCookieTracker.Visits = visits;
+        if (visitpopupshown != '') {
+            VisitingCookieTracker.PopupAlreadyShownOnVisit.push(visitpopupshown);
+        }
+        T3Core.CookieManager.CreateCookie(cookieName, JSON.stringify(VisitingCookieTracker), duration);
+    },
+    ReadJsonFromCookie: function (cookieName) {
+        var cookieObj = T3Core.CookieManager.ReadCookie(cookieName);
+        var obj = null;
+        if (cookieObj != null) {
+            try {
+                obj = JSON.parse(cookieObj);
+            } catch (e) {
+                if (cookieObj.indexOf(CookieValues.HasSubmitted) != -1) {
+                    T3MCP.SaveJsonToCookie(cookieName, CookieValues.HasSubmitted, '', '', '', 365);
+                    obj = JSON.parse(T3Core.CookieManager.ReadCookie(cookieName));
+                }
+            }
+        }
+        return obj;
+    },
+    DataObj: {
+        PageView: 0,
+        Visits: 0,
+        NeedToShowPopupOnCurrentVisit: false,
+        NeedToShowPopupOnCurrentPageView: false,
+        PopupAlreadyShown: false,
+        ShowPopup: false
+    },
+    ProcessCookiesValuesAndShowPopupIfNeeded: function () {
+        var cookieObj = this.ReadJsonFromCookie(_MCCookieName);
+        this.DataObj.PageView = parseInt(cookieObj.PageView);
+        this.DataObj.Visits = parseInt(cookieObj.Visits);
+        if (cookieObj.PopupAlreadyShownOnVisit.length > 0) {
+            this.DataObj.PopupAlreadyShown = ($.inArray(this.DataObj.Visits, cookieObj.PopupAlreadyShownOnVisit) != -1)
+        }
+
+        this.DataObj.NeedToShowPopupOnCurrentVisit = (($.inArray(this.DataObj.Visits, _Visits) != -1) && !this.DataObj.PopupAlreadyShown);
+        this.DataObj.NeedToShowPopupOnCurrentPageView = (this.DataObj.PageView == _PageViewNumber);
+
+        if (this.DataObj.NeedToShowPopupOnCurrentVisit) {
+            if (this.DataObj.PageView <= _PageViewNumber) {
+                if (this.DataObj.NeedToShowPopupOnCurrentPageView) {
+                    this.SaveJsonToCookie(_MCCookieName, CookieValues.ShowOnNextVisit, 1, this.DataObj.Visits, this.DataObj.Visits, 30);
+                } else {
+                    var pageview = this.DataObj.PageView + 1;
+                    this.SaveJsonToCookie(_MCCookieName, CookieValues.ShowOnNextVisit, pageview, this.DataObj.Visits, '', 30);
+                }
+            }
+        }
+
+        if (this.DataObj.Visits > _Visits[_Visits.length - 1]) {
+            //Visiting number is bigger
+        }
+
+        if (this.DataObj.NeedToShowPopupOnCurrentVisit && this.DataObj.NeedToShowPopupOnCurrentPageView) {
+            this.DataObj.ShowPopup = true;
+            this.ShowForm(null);
+        }
+    },
+    ShowForm: function (delay) {
+        var delay = delay == null ? _Popup_delay : delay;
+        $('.popupClose', T3MCP.Popup).show();
+        setTimeout(function () {
+            T3MCP.Popup.addClass('modalize');
+            _MCPopupCustomCallBack.OnShow();
+        }, delay);
+
+    },
+    LoadValidator: function () {
+        var bValidatorOptions = {
+            singleError: true
+        };
+        
+        $('form', T3MCP.Popup).bValidator(bValidatorOptions);
+    },
+    FormSubmit: function () {
+        var formElem = $('form', T3MCP.Popup);
+        formElem.bind('submit', function (e) {
+            var url = $(this).attr('action').replace('/post?','/post-json?') + '&' + $(this).serialize() + '&c=?';
+            var options = {
+                url: url,
+                type: 'GET',
+                dataType: 'json',
+                contentType: "application/json; charset=utf-8",
+                success: T3MCP.Success
+            };
+            $.ajax(options);
+            _MCPopupCustomCallBack.OnFormSubmitted();
+            e.preventDefault();
+            return false;
+        });
+    },
+    InitCustomEvents: function () {
+        $('.popupClose', T3MCP.Popup).click(function () {
+            T3MCP.HideForm(true, 'User has clicked on close button');
+            return false;
+        });
+
+        $(document).keydown(function (e) {
+            keycode = e == null ? event.keyCode : e.which;
+            if (keycode == 27) {
+                T3MCP.HideForm(true, 'User has pressed escape key');
+            }
+        });
+
+        $('body').click(function (e) {
+            if ($(e.target).is($('div.xcenter', T3MCP.Popup))) {
+                T3MCP.HideForm(true, 'User has clicked outside the form');
+            }
+        });
+        
+        $(".popupTrigger").click(function (e) {
+            T3MCP.ShowForm(500);
+            e.stopPropagation();
+            return false;
+        });
+    },
+    Initialize: function () {
+        this.Popup = $('.modalHolder');
+        this.HideForm(false);
+        this.ReadCookiesAndShowPopup();
+        this.InitCustomEvents();
+        T3MCP.LoadValidator();
+        T3MCP.FormSubmit();
+    },
+    Success: function (resp) {
+        var responseWrapper = $('.response-wrapper', T3MCP.Popup);
+        $('.response', responseWrapper).hide();
+        if (resp.result == "success") {
+            T3MCP.SaveJsonToCookie(_MCCookieName, CookieValues.HasSubmitted, '', '', '', 365);
+            if(_MCAllowDefaultSuccessCallBack){
+                $('.mce-success-response', responseWrapper).html(resp.msg).show();
+                $('input[type="text"]', T3MCP.Popup).val('');
+                $('input[type="submit"]', T3MCP.Popup).prop('disabled', 'disabled');
+                setTimeout(function () {
+                    T3MCP.HideForm();
+                }, 4500);
+            }
+            
+            T3MCP.UserHasSignedup = true;
+            _MCPopupCustomCallBack.Success(resp.msg);
+            
+        }else{
+            //check if user has already subscribed..
+            if(resp.msg.indexOf('Click here to update your profile') != -1){
+              T3MCP.SaveJsonToCookie(_MCCookieName, CookieValues.HasSubmitted, '', '', '', 365);
+              
+              if(_MCAllowDefaultSuccessCallBack){
+                  $('.mce-success-response', responseWrapper).html('Thank you.').show();
+                  $('input[type="text"]', T3MCP.Popup).val('');
+                  $('input[type="submit"]', T3MCP.Popup).prop('disabled', 'disabled');
+                  setTimeout(function () {
+                    T3MCP.HideForm();
+                  }, 1500);
+              }
+              
+              T3MCP.UserHasSignedup = true;
+              _MCPopupCustomCallBack.Success(resp.msg);
+              
+              return; 
+            }
+          
+            T3MCP.Error(resp);
+        }
+    },
+    Error:function(resp){
+        var index = -1;
+        var msg;
+        try {
+            var parts = resp.msg.split(' - ', 2);
+            if (parts[1] == undefined) {
+                msg = resp.msg;
+            }else {
+                i = parseInt(parts[0]);
+                if (i.toString() == parts[0]) {
+                    index = parts[0];
+                    msg = parts[1];
+                } else {
+                    index = -1;
+                    msg = resp.msg;
+                }
+            }
+        }catch (e) {
+            index = -1;
+            msg = resp.msg;
+        }
+        try{
+            $('.mce-' + resp.result + '-response', T3MCP.Popup).show();
+            $('.mce-' + resp.result + '-response', T3MCP.Popup).html(msg);
+        }catch(e) {
+            $('.mce-' + resp.result + '-response').show();
+            $('.mce-' + resp.result + '-response').html(msg);
+        }
+      
+        T3MCP.SaveJsonToCookie(_MCCookieName, CookieValues.ErrorInSubmitted, '', '', '', 2);
+        _MCPopupCustomCallBack.Error(msg);
+    },
+    Popup:null,
+    UserHasSignedup:false
+};
+
+(function(){
+    var query = T3Core.GetQueryStringByKey('signup');
+    var isMailChimpGoalkeeperPresent =  T3Core.CookieManager.ReadCookie('goal') != null || T3Core.GetQueryStringByKey('goal') != "";
+    if(_ShowPopupOnMobileDevices || !T3Core.IsMobileDevice()){
+        if(query == '' && !isMailChimpGoalkeeperPresent){
+            T3MCP.Initialize();
+        }else if(query == 1){
+            T3MCP.Initialize();
+            T3MCP.ShowForm();
+        }
+    }
+})();

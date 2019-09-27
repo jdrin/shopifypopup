@@ -1,0 +1,108 @@
+var fnames = new Array(); var ftypes = new Array(); fnames[0] = 'EMAIL'; ftypes[0] = 'email'; fnames[1] = 'FNAME'; ftypes[1] = 'text'; fnames[2] = 'LNAME'; ftypes[2] = 'text';
+
+/*Custom callbacks will go in here..*/
+var MCEmbedCustomCallBack = {
+	Success:function(trackingElement){
+		T3Core.TrackUserSignUpEmbed(trackingElement);
+		{% if settings.signup_fb_tracking %}
+			T3Core.TrackFacebookCompleteRegistration({
+	          content_name: trackingElement.attr('data-ga-action')
+	        });
+		{% endif %}
+	}
+};
+
+$(document).ready(function() {
+	$('.mailchimp-embed-form-wrapper').each(function(){
+		$(this).submit(function(e){
+			var embedSubscribeFormWrapper = $(this);
+			var embedSubscribeForm = $('.mailchimp-embed-form', embedSubscribeFormWrapper);
+			var submitButton = $('input[type="submit"]', embedSubscribeForm);
+			var formUrl = embedSubscribeForm.attr('action').replace('/post?','/post-json?')+ '&' + embedSubscribeForm.serialize() +'&c=?';
+			var options = {
+				url: formUrl,
+				type: 'GET',
+				dataType: 'json',
+				contentType: "application/json; charset=utf-8",
+				beforeSend: function () {
+					$('.response-wrapper .response', embedSubscribeFormWrapper).hide();
+				},
+				success: function(resp) {
+					mce_success_cb(resp, embedSubscribeFormWrapper, embedSubscribeForm);
+				}
+			};
+
+			embedSubscribeForm.bValidator({singleError: true});
+			$.ajax(options);
+			e.preventDefault();
+			return false;
+		});
+	});
+});
+
+function mce_success_cb(resp, wrapper, theForm) {
+	$('#mce-success-response', wrapper).hide();
+	$('#mce-error-response', wrapper).hide();
+	if (resp.result == "success") {
+		$('#mce-' + resp.result + '-response', wrapper).show();
+		$('#mce-' + resp.result + '-response', wrapper).html(resp.msg);
+		theForm.each(function () {
+			this.reset();
+		});
+
+		MCEmbedCustomCallBack ? MCEmbedCustomCallBack.Success(wrapper) : null;
+	} else {
+		var index = -1;
+		var msg;
+		try {
+			var parts = resp.msg.split(' - ', 2);
+			if (parts[1] == undefined) {
+				msg = resp.msg;
+			} else {
+				i = parseInt(parts[0]);
+				if (i.toString() == parts[0]) {
+					index = parts[0];
+					msg = parts[1];
+				} else {
+					index = -1;
+					msg = resp.msg;
+				}
+			}
+		} catch (e) {
+			index = -1;
+			msg = resp.msg;
+		}
+		try {
+			if (index == -1) {
+				$('#mce-' + resp.result + '-response', wrapper).show();
+				$('#mce-' + resp.result + '-response', wrapper).html(msg);
+			} else {
+				err_id = 'mce_tmp_error_msg';
+				html = '<div id="' + err_id + '" style="' + err_style + '"> ' + msg + '</div>';
+
+				var input_id = wrapper.attr('id');
+				var f = $(input_id);
+				if (ftypes[index] == 'address') {
+					input_id = '#mce-' + fnames[index] + '-addr1';
+					f = $(input_id).parent().parent().get(0);
+				} else if (ftypes[index] == 'date') {
+					input_id = '#mce-' + fnames[index] + '-month';
+					f = $(input_id).parent().parent().get(0);
+				} else {
+					input_id = '#mce-' + fnames[index];
+					f = $().parent(input_id).get(0);
+				}
+				if (f) {
+					$(f).append(html);
+					$(input_id).focus();
+				} else {
+					$('#mce-' + resp.result + '-response', wrapper).show();
+					$('#mce-' + resp.result + '-response', wrapper).html(msg);
+				}
+			}
+		} catch (e) {
+			$('#mce-' + resp.result + '-response', wrapper).show();
+			$('#mce-' + resp.result + '-response', wrapper).html(msg);
+		}
+	}
+}

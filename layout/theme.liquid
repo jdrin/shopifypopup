@@ -1,0 +1,15 @@
+{{ 'popup-core.js'  | asset_url | script_tag }}
+{% unless settings.modal_signup_first == '0' %}
+  {{ 'mailchimp.popupsignup.scss.css' | asset_url | stylesheet_tag }}
+  {{ 'bvalidator.css' | asset_url | stylesheet_tag }}
+  {% include 'popup-signup' %}
+  {% include 'mailchimp-signup-script' %}
+  {{ 'jquery.bvalidator.js'  | asset_url | script_tag }}
+  {{ 'mailchimp.popup.js'  | asset_url | script_tag }}
+{% endunless %}
+
+<!--Usage for the Embed Mailchimp form-->
+{% include 'embed-signup' %}
+{{ 'bvalidator.css' | asset_url | stylesheet_tag }}
+{{ 'jquery.bvalidator.js'  | asset_url | script_tag }}
+{{ 'mailchimp.embed.js'  | asset_url | script_tag }}

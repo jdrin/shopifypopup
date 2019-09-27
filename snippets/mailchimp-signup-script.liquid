@@ -1,0 +1,60 @@
+<script type="text/javascript">
+  {% if settings.modal_success_callback == 'server' %}
+    var _MCAllowDefaultSuccessCallBack = true;
+  {% else %}
+    var _MCAllowDefaultSuccessCallBack = false;
+  {% endif %}
+  var MCPopupTrackers = {
+    Category:"UserSignupMailchimpPopup",
+    Actions:{ Success: "Success", Error:"Error", FormSubmitted:"FormSubmitted", OnShow:"Displayed", ClosedWithoutSignup:"ClosedWithoutSignup"}
+  };
+  var MCPopupCustomCallBack = {
+    Success:function(msg){
+      if(_MCAllowDefaultSuccessCallBack){
+        T3Core.TrackUserSignUp(MCPopupTrackers.Category, MCPopupTrackers.Actions.Success, 'Opt-in confirmation email sent.');
+      }else{
+        // A custom success callback can be created here. For example we are showing a promo code specified in the settings.html file...
+        T3Core.TrackUserSignUp(MCPopupTrackers.Category, MCPopupTrackers.Actions.Success, 'Promo Code: {{ settings.modal_promo_code }}');
+        $('.mce-success-response', T3MCP.Popup).html('<span class="promo-code">Promo Code: <b>{{ settings.modal_promo_code }}</b></span>').show();
+      }
+	  
+	   {% if settings.signup_fb_tracking %}
+	     T3Core.TrackFacebookCompleteRegistration({
+		  content_name: MCPopupTrackers.Category
+		 });
+	   {% endif %}
+	   console.log('Success '+ msg);
+    },
+    Error:function(msg){
+      T3Core.TrackUserSignUp(MCPopupTrackers.Category, MCPopupTrackers.Actions.Error, 'Error'); // substituting msg for 'Error' will print actual text, probably superfluous
+	  console.log('Error '+ msg);
+    },
+    OnShow:function(){
+      T3Core.TrackUserSignUp(MCPopupTrackers.Category, MCPopupTrackers.Actions.OnShow, "");
+	  console.log('Popup is now visible');
+    },
+    OnFormSubmitted:function(){
+      T3Core.TrackUserSignUp(MCPopupTrackers.Category, MCPopupTrackers.Actions.FormSubmitted, "");
+	  console.log('Form submitted...');
+    },
+    ClosedWithoutSignup:function(msg){
+      T3Core.TrackUserSignUp(MCPopupTrackers.Category, MCPopupTrackers.Actions.ClosedWithoutSignup, msg);
+	  console.log('User has closed without signing up...'+msg);
+    }
+  };
+
+  {% assign first_visit = settings.modal_signup_first %}
+  {% assign total_visits = settings.modal_signup_total %}
+  var _MCCookieName = 'MCEvilPopupClosed';
+  var _Visits = [{{ first_visit }}{% for i in (1..total_visits) %}{% capture next_visit %}{{ first_visit | plus: i }}{% endcapture %},{{ next_visit }}{% endfor %}];
+  var _PageViewNumber = {{ settings.modal_signup_page_view }};
+  var _SessionCookieName = 'SessionCookie';
+  var CookieValues = { NotSubmitted : 'NotSubmitted', HasSubmitted : 'HasSubmitted', ShowOnNextVisit: 'ShowOnNextVisit', ErrorInSubmitted: 'ErrorInSubmitted'};
+  var _Popup_delay = {{ settings.modal_signup_delay_time }};
+  var _ShowPopupOnMobileDevices = {{ settings.modal_show_on_mobile_device }};
+  var _ShowPopupOnCurrentPage = false;
+  var _MCPopupCustomCallBack = MCPopupCustomCallBack;
+  {% unless template == 'cart' or template contains 'customers' %}
+    _ShowPopupOnCurrentPage = true;
+  {% endunless %}
+</script>
